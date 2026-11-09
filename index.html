@@ -197,7 +197,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const haptic = t => { try { tg && tg.HapticFeedback && (t ? tg.HapticFeedback.notificationOccurred(t) : tg.HapticFeedback.selectionChanged()); } catch (e) {} };
 
-let CUR = 'сум', PREORDER = false, SHOP = 'Smart Store';
+let CUR = 'сум', PREORDER = false, SHOP = 'Smart Store', BOT = '';
 const fmt = n => Number(n || 0).toLocaleString('ru-RU').replace(/[\s, ]/g, ' ') + ' ' + CUR;
 
 // цвета корпусов → оттенок нарисованного телефона
@@ -371,7 +371,7 @@ function renderSheet() {
       <div class="t"><b>${esc(it.brand)} ${esc(it.model)}</b><small>${esc(it.mem)} · ${esc(it.color)} · ${fmt(it.price)}</small></div>
       <div class="q2"><button data-sdec="${id}">−</button><b>${cart[id]}</b><button data-sinc="${id}">+</button></div></div>`; }).join('') +
     `<div class="total"><span>Итого · ${cnt} шт.</span><span>${fmt(sum)}</span></div>
-     <div class="note">После оформления бот попросит номер телефона, менеджер подтвердит заказ.</div>
+     <div class="note">Заказ уйдёт в чат с ботом. Если номер ещё не сохранён — бот попросит его, менеджер подтвердит заказ.</div>
      <button class="buy" id="checkout">Оформить заказ</button>`;
 }
 function openSheet() { renderSheet(); $('sheet').style.display = 'block'; }
@@ -400,16 +400,24 @@ document.addEventListener('click', e => {
   if (t.id === 'openCart' || t.id === 'btnCart') return Object.keys(cart).length ? openSheet() : haptic('warning');
   if (t.id === 'btnSearch') { const s = $('searchbar'); s.style.display = s.style.display === 'block' ? 'none' : 'block'; if (s.style.display === 'block') $('q').focus(); return; }
   if (t.id === 'checkout') {
-    const payload = JSON.stringify({ items: Object.keys(cart).map(id => [+id, cart[id]]) });
-    try { tg.sendData(payload); }   // бот получит web_app_data, витрина закроется
-    catch (err) { alert('Откройте витрину кнопкой «🛍 Витрина» в Telegram-боте'); }
+    const items = Object.keys(cart).map(id => [+id, cart[id]]);
+    if (tg && tg.initData && BOT) {
+      // открыта кнопкой меню: sendData тут не работает — отдаём корзину боту ссылкой ?start=o_12x1_40x2
+      const code = 'o_' + items.map(([i, q]) => i + 'x' + q).join('_');
+      if (code.length > 64) { alert('Слишком много разных позиций за раз — оформите часть, затем остальное.'); return; }
+      tg.openTelegramLink('https://t.me/' + BOT + '?start=' + code);
+      setTimeout(() => tg.close(), 300);
+      return;
+    }
+    try { tg.sendData(JSON.stringify({ items })); }   // открыта кнопкой клавиатуры: бот получит web_app_data
+    catch (err) { alert('Откройте витрину кнопкой «Витрина» в Telegram-боте'); }
   }
 });
 $('sheetBg').onclick = closeSheet;
 $('q').oninput = e => { query = e.target.value.trim(); renderList(); };
 
 loadData().then(d => {
-  CUR = d.c || 'сум'; PREORDER = !!d.o; SHOP = d.s || SHOP;
+  CUR = d.c || 'сум'; PREORDER = !!d.o; SHOP = d.s || SHOP; BOT = d.b || '';
   const items = (d.p || []).map(r => ({ id: r[0], brand: r[1], model: r[2], mem: r[3], color: r[4], price: r[5], qty: r[6], img: r[7] }));
   byId = Object.fromEntries(items.map(i => [i.id, i]));
   groups = buildGroups(items);
