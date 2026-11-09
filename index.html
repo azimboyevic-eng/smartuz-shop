@@ -71,8 +71,13 @@
   .tile.wide .phone + .phone { right: 128px; top: 40px; }
   .tile .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(0,0,0,.6) 55%, rgba(0,0,0,.92) 100%); }
   .nw { white-space: nowrap; }
+  .hero-img { position: absolute; right: -40px; top: 10px; width: 300px; filter: drop-shadow(0 24px 40px rgba(0,0,0,.55)); }
+  .tile-img { position: absolute; right: -18px; top: 18px; width: 170px; filter: drop-shadow(0 14px 24px rgba(0,0,0,.5)); }
+  .tile.wide .tile-img { width: 230px; right: 0; top: 0; }
+  .line-img { width: 46px; height: 46px; object-fit: contain; flex: none; background: var(--bg); border-radius: 12px; }
+  .card .media img { max-width: 92%; max-height: 92%; filter: drop-shadow(0 16px 22px rgba(0,0,0,.18)); }
   .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,.55) 55%, rgba(0,0,0,.85) 100%); }
-  .hero > *:not(.art) { position: relative; z-index: 1; }
+  .hero > *:not(.art):not(.hero-img) { position: relative; z-index: 1; }
   .tile .tag { position: absolute; left: 12px; top: 12px; background: #fff; color: var(--ink); font-size: 12px; font-weight: 600;
                padding: 5px 10px; border-radius: 999px; }
   .tile .tx { position: relative; padding: 14px; }
@@ -207,6 +212,7 @@ const COLORS = {
 };
 const colorOf = name => COLORS[String(name || '').toLowerCase().trim()] || '#8e8e93';
 const phone = (c, cls = '') => `<div class="phone ${cls}" style="--c:${c}"><i></i><i></i><i></i><b></b></div>`;
+const pic = (g, color) => (g.items.find(i => i.color === color && i.img) || g.items.find(i => i.img) || {}).img;
 const memVal = m => { const x = parseFloat(m) || 0; return /tb/i.test(m) ? x * 1024 : x; };
 
 let groups = [], filter = '', query = '';
@@ -261,7 +267,8 @@ function renderStatic() {
   if (top) {
     const cols = top.colors.slice(0, 2).map(colorOf);
     $('hero').innerHTML = `
-      <div class="art">${phone(cols[0])}${phone(cols[1] || cols[0])}</div>
+      ${pic(top, top.colors[0]) ? `<img class="hero-img" src="${esc(pic(top, top.colors[0]))}" alt="">`
+                                : `<div class="art">${phone(cols[0])}${phone(cols[1] || cols[0])}</div>`}
       <div class="kicker">Новинка</div>
       <h1 class="disp">${esc(top.brand)} ${esc(shortModel(top.model))}</h1>
       <p>${top.colors.length} ${plural(top.colors.length, 'цвет', 'цвета', 'цветов')} · ${esc(top.mems.join(' / '))}${sub(top.model) ? ' · ' + esc(sub(top.model)) : ''}</p>
@@ -279,7 +286,8 @@ function renderStatic() {
       const cols = g.colors.map(colorOf);
       const wide = i === 0 && groups.length % 2 === 1;   // нечётное число — первая плитка во всю ширину
       return `<button class="tile ${wide ? 'wide' : ''}" data-go="${esc(g.key)}">
-        ${phone(cols[0])}${cols[1] ? phone(cols[1]) : ''}<div class="shade"></div>
+        ${pic(g, g.colors[i % g.colors.length]) ? `<img class="tile-img" src="${esc(pic(g, g.colors[i % g.colors.length]))}" alt="" loading="lazy">`
+                                 : phone(cols[0]) + (cols[1] ? phone(cols[1]) : '')}<div class="shade"></div>
         <span class="tag">${g.inStock ? 'В наличии' : (PREORDER ? 'Под заказ' : 'Нет')}</span>
         <div class="tx"><b>${esc(shortModel(g.model))}</b><small><span>${sub(g.model) ? esc(sub(g.model)) + '<br>' : ''}<span class="nw">от ${fmt(g.min)}</span></span><span>→</span></small></div>
       </button>`;
@@ -359,7 +367,7 @@ function renderSheet() {
   if (!ids.length) { closeSheet(); return; }
   const { cnt, sum } = renderBar();
   $('panel').innerHTML = `<div class="grab"></div><h3 class="disp">Корзина</h3>` +
-    ids.map(id => { const it = byId[id]; return `<div class="line">${phone(colorOf(it.color))}
+    ids.map(id => { const it = byId[id]; return `<div class="line">${it.img ? `<img class="line-img" src="${esc(it.img)}" alt="">` : phone(colorOf(it.color))}
       <div class="t"><b>${esc(it.brand)} ${esc(it.model)}</b><small>${esc(it.mem)} · ${esc(it.color)} · ${fmt(it.price)}</small></div>
       <div class="q2"><button data-sdec="${id}">−</button><b>${cart[id]}</b><button data-sinc="${id}">+</button></div></div>`; }).join('') +
     `<div class="total"><span>Итого · ${cnt} шт.</span><span>${fmt(sum)}</span></div>
