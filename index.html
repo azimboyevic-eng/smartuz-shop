@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Витрина смартфонов</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -151,6 +153,17 @@
   .total { display: flex; justify-content: space-between; margin: 16px 0 6px; font-weight: 700; font-size: 18px; }
   .note { color: var(--ink2); font-size: 13px; margin-bottom: 14px; }
   .panel .buy { margin-top: 4px; }
+  .field { display: block; margin: 0 0 12px; }
+  .field span { display: block; font-size: 12px; color: var(--ink2); margin-bottom: 6px; }
+  .field input, .field textarea { width: 100%; border: 1px solid var(--line); border-radius: 14px; padding: 13px 14px;
+                                  font: inherit; background: var(--bg); outline: none; }
+  .field input:focus, .field textarea:focus { border-color: var(--ink); background: #fff; }
+  .btn-ghost { width: 100%; border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 12px; font-weight: 600; margin-bottom: 12px; }
+  .err { color: var(--red); font-size: 13px; margin: -4px 0 10px; min-height: 1em; }
+  .done { text-align: center; padding: 20px 6px 8px; }
+  .done .ok { width: 64px; height: 64px; border-radius: 50%; background: #e8f6ee; color: var(--green); display: grid; place-items: center;
+              font-size: 32px; margin: 0 auto 14px; }
+  .dark a { color: #9a9a9a; font-size: 13px; }
 
   /* телефон, нарисованный CSS — цвет корпуса из переменной --c */
   .phone { --c: #2b2b2d; position: relative; aspect-ratio: 9 / 19; border-radius: 22% / 10.5%;
@@ -197,7 +210,10 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const haptic = t => { try { tg && tg.HapticFeedback && (t ? tg.HapticFeedback.notificationOccurred(t) : tg.HapticFeedback.selectionChanged()); } catch (e) {} };
 
-let CUR = 'сум', PREORDER = false, SHOP = 'Smart Store', BOT = '';
+let CUR = 'сум', PREORDER = false, SHOP = 'Smart Store';
+const CFG = window.SHOP_CFG || {};
+const sb = (CFG.supabaseUrl && window.supabase) ? supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnon, { db: { schema: CFG.schema || 'shop' } }) : null;
+const TGU = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || null;   // клиент открыл сайт из Telegram
 const fmt = n => Number(n || 0).toLocaleString('ru-RU').replace(/[\s, ]/g, ' ') + ' ' + CUR;
 
 // цвета корпусов → оттенок нарисованного телефона
@@ -227,8 +243,16 @@ function b64urlToBytes(s) {
   return out;
 }
 async function loadData() {
+  if (sb) {   // живой каталог из базы: цена продажи + сколько штук (IMEI) на складе
+    const [cat, st] = await Promise.all([sb.rpc('catalog'), sb.from('shop_settings').select('key,value')]);
+    if (cat.error) throw new Error('Каталог не загрузился: ' + cat.error.message);
+    const s = Object.fromEntries((st.data || []).map(r => [r.key, r.value]));
+    return { s: s.shop_name, c: s.currency, o: s.preorder ? 1 : 0,
+             p: cat.data.map(r => [r.id, r.brand, r.model, r.memory, r.color, Number(r.price), r.in_stock, r.image_url]) };
+  }
+  // запасной путь: старые ссылки из бота с каталогом в адресе
   const z = new URLSearchParams(location.search).get('z');
-  if (!z) throw new Error('Нет данных каталога — откройте витрину кнопкой в боте');
+  if (!z) throw new Error('Каталог временно недоступен');
   const stream = new Blob([b64urlToBytes(z)]).stream().pipeThrough(new DecompressionStream('deflate'));
   return JSON.parse(await new Response(stream).text());
 }
@@ -279,7 +303,7 @@ function renderStatic() {
   }
   const total = groups.reduce((s, g) => s + g.items.length, 0);
   $('intro').innerHTML = `<h2 class="disp">Каталог смартфонов</h2>
-    <p>${groups.length} ${plural(groups.length, 'модель', 'модели', 'моделей')} · ${total} ${plural(total, 'вариант', 'варианта', 'вариантов')} памяти и цвета · заказ прямо в Telegram</p>`;
+    <p>${groups.length} ${plural(groups.length, 'модель', 'модели', 'моделей')} · ${total} ${plural(total, 'вариант', 'варианта', 'вариантов')} памяти и цвета · заказ онлайн за минуту</p>`;
 
   $('collections').innerHTML = `<div class="sec-h"><h3>Коллекции</h3><span>${groups.length}</span></div><div class="tiles">` +
     groups.map((g, i) => {
@@ -297,10 +321,11 @@ function renderStatic() {
   const chips = [['', 'Все'], ...(brands.length > 1 ? brands.map(b => ['b:' + b, b]) : []), ...groups.map(g => ['m:' + g.key, shortModel(g.model) + (sub(g.model) ? ' · ' + sub(g.model) : '')])];
   $('chips').innerHTML = chips.map(([v, t]) => `<button class="chip ${v === filter ? 'on' : ''}" data-f="${esc(v)}">${esc(t)}</button>`).join('');
 
-  $('dark').innerHTML = `<div class="q">Оформление заказа — прямо в Telegram, менеджер подтвердит наличие и доставку</div>
+  $('dark').innerHTML = `<div class="q">Оформите заказ на сайте или в Telegram — менеджер перезвонит и подтвердит наличие</div>
     <div class="row"><div><div class="num">${groups.length}</div><div class="lbl">${plural(groups.length, 'модель', 'модели', 'моделей')} в каталоге</div></div>
     <div><div class="num">${total}</div><div class="lbl">${plural(total, 'вариант', 'варианта', 'вариантов')}</div></div>
-    <div><div class="num">от ${Number(Math.min(...groups.map(g => g.min))).toLocaleString('ru-RU')}</div><div class="lbl">${esc(CUR)} — цена</div></div></div>`;
+    <div><div class="num">от ${Number(Math.min(...groups.map(g => g.min))).toLocaleString('ru-RU')}</div><div class="lbl">${esc(CUR)} — цена</div></div></div>
+    <p style="margin-top:28px">${CFG.bot ? `<a href="https://t.me/${esc(CFG.bot)}">Telegram-бот @${esc(CFG.bot)}</a> · ` : ''}<a href="admin.html">Вход для сотрудников</a></p>`;
 }
 
 function plural(n, a, b, c) { n = Math.abs(n) % 100; const d = n % 10; return n > 10 && n < 20 ? c : d === 1 ? a : d > 1 && d < 5 ? b : c; }
@@ -371,8 +396,44 @@ function renderSheet() {
       <div class="t"><b>${esc(it.brand)} ${esc(it.model)}</b><small>${esc(it.mem)} · ${esc(it.color)} · ${fmt(it.price)}</small></div>
       <div class="q2"><button data-sdec="${id}">−</button><b>${cart[id]}</b><button data-sinc="${id}">+</button></div></div>`; }).join('') +
     `<div class="total"><span>Итого · ${cnt} шт.</span><span>${fmt(sum)}</span></div>
-     <div class="note">Заказ уйдёт в чат с ботом. Если номер ещё не сохранён — бот попросит его, менеджер подтвердит заказ.</div>
+     <div class="note">Менеджер перезвонит, подтвердит наличие и договорится о получении.</div>
      <button class="buy" id="checkout">Оформить заказ</button>`;
+}
+
+const CK = { name: '', phone: '', comment: '' };   // черновик формы — не терять при перерисовке
+function renderCheckout(err = '') {
+  const { cnt, sum } = renderBar();
+  if (!CK.name && TGU) CK.name = [TGU.first_name, TGU.last_name].filter(Boolean).join(' ');
+  const canAsk = tg && tg.requestContact && tg.isVersionAtLeast && tg.isVersionAtLeast('6.9');
+  $('panel').innerHTML = `<div class="grab"></div><h3 class="disp">Оформление</h3>
+    <div class="note">${cnt} шт. на ${fmt(sum)}</div>
+    <label class="field"><span>Ваше имя</span><input id="ckName" value="${esc(CK.name)}" autocomplete="name" placeholder="Как к вам обращаться"></label>
+    <label class="field"><span>Телефон</span><input id="ckPhone" value="${esc(CK.phone)}" type="tel" autocomplete="tel" placeholder="+998 90 123 45 67"></label>
+    ${canAsk ? '<button class="btn-ghost" id="ckShare">📱 Подставить номер из Telegram</button>' : ''}
+    <label class="field"><span>Комментарий (необязательно)</span><textarea id="ckComment" rows="2" placeholder="Удобное время звонка, доставка…">${esc(CK.comment)}</textarea></label>
+    <div class="err" id="ckErr">${esc(err)}</div>
+    <button class="buy" id="ckSend">Подтвердить заказ</button>
+    <button class="btn-ghost" id="ckBack" style="margin-top:10px">← Назад в корзину</button>`;
+  ['Name', 'Phone', 'Comment'].forEach(k => $('ck' + k).oninput = e => CK[k.toLowerCase()] = e.target.value);
+}
+
+async function sendOrder() {
+  const phone = CK.phone.trim(), name = CK.name.trim();
+  if (phone.replace(/\D/g, '').length < 9) return renderCheckout('Укажите номер телефона полностью');
+  if (!sb) return renderCheckout('Заказы временно не принимаются — напишите нам в Telegram');
+  const btn = $('ckSend'); btn.disabled = true; btn.textContent = 'Отправляем…';
+  const items = Object.keys(cart).map(id => ({ product_id: +id, qty: cart[id] }));
+  const { data, error } = await sb.rpc('place_order', {
+    p_items: items, p_name: name, p_phone: phone, p_comment: CK.comment.trim() || null,
+    p_tg_user_id: TGU ? TGU.id : null, p_tg_username: TGU ? (TGU.username || null) : null,
+    p_source: TGU ? 'telegram' : 'site' });
+  if (error) { haptic('error'); return renderCheckout(error.message || 'Не получилось отправить заказ'); }
+  haptic('success');
+  Object.keys(cart).forEach(k => delete cart[k]); renderList();
+  $('panel').innerHTML = `<div class="grab"></div><div class="done"><div class="ok">✓</div>
+    <h3 class="disp">Заказ №${data} принят</h3>
+    <p class="note">Менеджер свяжется с вами по номеру ${esc(phone)}.${TGU ? ' Статус заказа придёт в чат с ботом.' : ''}</p>
+    <button class="buy" id="ckDone">Готово</button></div>`;
 }
 function openSheet() { renderSheet(); $('sheet').style.display = 'block'; }
 function closeSheet() { $('sheet').style.display = 'none'; }
@@ -399,25 +460,23 @@ document.addEventListener('click', e => {
   if (d.sdec) { change(d.sdec, -1); renderList(); return renderSheet(); }
   if (t.id === 'openCart' || t.id === 'btnCart') return Object.keys(cart).length ? openSheet() : haptic('warning');
   if (t.id === 'btnSearch') { const s = $('searchbar'); s.style.display = s.style.display === 'block' ? 'none' : 'block'; if (s.style.display === 'block') $('q').focus(); return; }
-  if (t.id === 'checkout') {
-    const items = Object.keys(cart).map(id => [+id, cart[id]]);
-    if (tg && tg.initData && BOT) {
-      // открыта кнопкой меню: sendData тут не работает — отдаём корзину боту ссылкой ?start=o_12x1_40x2
-      const code = 'o_' + items.map(([i, q]) => i + 'x' + q).join('_');
-      if (code.length > 64) { alert('Слишком много разных позиций за раз — оформите часть, затем остальное.'); return; }
-      tg.openTelegramLink('https://t.me/' + BOT + '?start=' + code);
-      setTimeout(() => tg.close(), 300);
-      return;
-    }
-    try { tg.sendData(JSON.stringify({ items })); }   // открыта кнопкой клавиатуры: бот получит web_app_data
-    catch (err) { alert('Откройте витрину кнопкой «Витрина» в Telegram-боте'); }
+  if (t.id === 'checkout') return renderCheckout();
+  if (t.id === 'ckBack') return renderSheet();
+  if (t.id === 'ckSend') return sendOrder();
+  if (t.id === 'ckDone') { closeSheet(); if (TGU) try { tg.close(); } catch (e) {} return; }
+  if (t.id === 'ckShare') {
+    tg.requestContact((ok, res) => {
+      const ph = ok && res && res.responseUnsafe && res.responseUnsafe.contact && res.responseUnsafe.contact.phone_number;
+      if (ph) { CK.phone = ph.startsWith('+') ? ph : '+' + ph; renderCheckout(); }
+    });
+    return;
   }
 });
 $('sheetBg').onclick = closeSheet;
 $('q').oninput = e => { query = e.target.value.trim(); renderList(); };
 
 loadData().then(d => {
-  CUR = d.c || 'сум'; PREORDER = !!d.o; SHOP = d.s || SHOP; BOT = d.b || '';
+  CUR = d.c || 'сум'; PREORDER = !!d.o; SHOP = d.s || SHOP;
   const items = (d.p || []).map(r => ({ id: r[0], brand: r[1], model: r[2], mem: r[3], color: r[4], price: r[5], qty: r[6], img: r[7] }));
   byId = Object.fromEntries(items.map(i => [i.id, i]));
   groups = buildGroups(items);
