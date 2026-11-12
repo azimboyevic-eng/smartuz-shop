@@ -49,7 +49,9 @@
   .cats { border-bottom: 1px solid var(--line); background: #fff; }
   .cats .wrap { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-top: 8px; padding-bottom: 8px; }
   .cats .wrap::-webkit-scrollbar { display: none; }
-  .chip { flex: none; border: 0; background: none; border-radius: 10px; padding: 7px 12px; color: var(--ink2); font-weight: 500; white-space: nowrap; }
+  .chip { flex: none; border: 0; background: none; border-radius: 10px; padding: 7px 12px; color: var(--ink2); font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+  .chip .ico { width: 18px; height: 18px; color: var(--ink2); }
+  .chip.on .ico, .chip:hover .ico { color: var(--acc); }
   .chip:hover, .chip.on { background: var(--soft); color: var(--ink); }
   .chip.on { font-weight: 600; }
 
@@ -377,8 +379,9 @@ function renderChrome() {
   document.title = S.shop + ' — интернет-магазин';
   const bot = CFG.bot ? 'https://t.me/' + CFG.bot : '#';
   $('topBot').href = bot; $('topOrders').href = CFG.bot ? bot + '?start=orders' : '#';
-  const chips = [['#/catalog', 'Все товары'], ...Object.entries(CATS).map(([k, c]) => ['#/catalog?cat=' + k, c.name])];
-  $('chips').innerHTML = chips.map(([h, t]) => `<a class="chip" href="${h}">${esc(t)}</a>`).join('');
+  const ALL_ICO = '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>';
+  const chips = [['#/catalog', 'Все товары', ALL_ICO], ...Object.entries(CATS).map(([k, c]) => ['#/catalog?cat=' + k, c.name, c.icon])];
+  $('chips').innerHTML = chips.map(([h, t, i]) => `<a class="chip" href="${h}"><svg class="ico" viewBox="0 0 24 24">${i}</svg>${esc(t)}</a>`).join('');
   $('foot').innerHTML = `<div style="flex:1;min-width:220px"><b>${esc(S.shop)}</b>Телефоны, планшеты, гарнитура и аксессуары с ценами и наличием.<br>Заказ онлайн — менеджер перезвонит и подтвердит.${S.contacts ? '<br>' + esc(S.contacts) : ''}</div>
     <div><b>Покупателям</b><a href="#/catalog">Каталог</a><a href="#/cart">Корзина</a><a href="#/fav">Избранное</a></div>
     <div><b>Связь</b>${CFG.bot ? `<a href="${bot}" target="_blank">Telegram @${esc(CFG.bot)}</a>` : ''}<a href="admin.html">Вход для сотрудников</a></div>`;
@@ -401,8 +404,8 @@ function viewHome() {
       <div class="dots">${tops.map((_, i) => `<button data-slide="${i}" class="${i ? '' : 'on'}" aria-label="Слайд ${i + 1}"></button>`).join('')}</div>
       <button class="arrow l" data-slide="-1" aria-label="Назад"><svg class="ico" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
       <button class="arrow r" data-slide="+1" aria-label="Вперёд"><svg class="ico" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button></div>` : ''}
-    <div class="tiles">${Object.entries(CATS).map(([k, c]) => { const gs = GROUPS.filter(g => g.cat === k), img = (gs.find(g => g.img) || {}).img;
-      return `<a class="tile" href="#/catalog?cat=${k}">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : catIco(k)}
+    <div class="tiles">${Object.entries(CATS).map(([k, c]) => { const gs = GROUPS.filter(g => g.cat === k);
+      return `<a class="tile" href="#/catalog?cat=${k}">${catIco(k)}
       <span>${esc(c.name)}<small>${gs.length ? gs.length + ' ' + plural(gs.length, 'модель', 'модели', 'моделей') : 'скоро'}</small></span></a>`; }).join('')}</div>
     ${instock.length ? `<div class="sec-h"><h2>В наличии</h2><a href="#/catalog?stock=1"><svg class="ico" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></a></div>${grid(instock)}` : ''}
     <div class="sec-h"><h2>Популярное</h2><a href="#/catalog"><svg class="ico" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></a></div>${grid(GROUPS)}
