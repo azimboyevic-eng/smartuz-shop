@@ -10,7 +10,7 @@
 <script src="config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root { --bg:#f6f5f3; --card:#fff; --ink:#111; --ink2:#6b6b6b; --ink3:#a3a3a3; --line:#ebe9e6;
           --red:#d7262e; --green:#1fa463; --amber:#e3a008; --blue:#2f6fde; --r:16px; }
@@ -108,11 +108,40 @@
   .switch { display: inline-flex; align-items: center; gap: 8px; }
   .loader { color: var(--ink3); padding: 30px 0; text-align: center; }
   @media (max-width: 640px) { .hide-sm { display: none; } th, td { padding: 7px 4px; } }
+
+  /* ---------- оформление как у витрины ---------- */
+  :root { --bg:#f2f4f7; --line:#e7e9ee; --ink:#1f2026; --ink2:#5e6372; --ink3:#9aa0ad; --red:#e1242d; --green:#12a150; --r:14px; }
+  html, body { background: #fff; }
+  .disp, .kpi b { font-family: Inter, sans-serif; font-weight: 800; letter-spacing: -.02em; }
+  .ico { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  header { height: 64px; padding-top: 0; padding-bottom: 0; }
+  header b { font-family: Inter, sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -.02em; text-transform: none; }
+  header b span { color: var(--red); }
+  header b .tag { margin-left: 8px; padding: 3px 9px; border-radius: 8px; background: #fde8e9; color: var(--red); font-size: 12px; font-weight: 600; letter-spacing: 0; vertical-align: 4px; }
+  nav { top: 64px; background: #fff; border-bottom: 1px solid var(--line); padding-top: 8px; padding-bottom: 8px; }
+  nav button { border: 0; background: none; border-radius: 10px; padding: 7px 12px; font-weight: 500; color: var(--ink2);
+               display: inline-flex; align-items: center; gap: 6px; }
+  nav button:hover, nav button.on { background: var(--bg); color: var(--ink); border: 0; }
+  nav button.on { font-weight: 600; }
+  nav button:hover .ico, nav button.on .ico { color: var(--red); }
+  nav button .cnt { margin-left: 2px; }
+  main { padding-top: 16px; }
+  .kpi { background: var(--bg); border: 0; }
+  .kpi b { font-size: 20px; }
+  .bar input, .bar select { background: var(--bg); border-color: transparent; border-radius: 10px; }
+  .bar input:focus, .bar select:focus, label.f input:focus, label.f select:focus, label.f textarea:focus { border-color: var(--red); background: #fff; }
+  label.f input, label.f select, label.f textarea { border-radius: 10px; }
+  .card:hover { border-color: #d6d9e0; }
+  .btn { border-radius: 10px; }
+  .btn.dark { background: var(--red); border-color: var(--red); }
+  .btn.dark:hover, .btn.red:hover { background: #c11a22; border-color: #c11a22; }
+  .login { border-radius: 22px; box-shadow: 0 10px 40px rgba(31,32,38,.08); }
+  @media (max-width: 640px) { header b { font-size: 18px; } }
 </style>
 </head>
 <body>
 <header>
-  <b id="logo">Склад<span> · админ</span></b>
+  <b id="logo">Smart<span>Uz</span><span class="tag">склад</span></b>
   <div class="who" id="who"></div>
 </header>
 <nav id="nav" style="display:none"></nav>
@@ -161,7 +190,11 @@ async function boot() {
   const { data: st } = await sb.from('shop_settings').select('key,value');
   const s = Object.fromEntries((st || []).map(r => [r.key, r.value]));
   CUR = s.currency || CUR;
-  if (s.shop_name) { const w = String(s.shop_name).split(/\s+/); $('logo').innerHTML = esc(w[0]) + '<span> ' + esc(w.slice(1).join(' ') + ' · склад') + '</span>'; }
+  if (s.shop_name) {
+    const w = String(s.shop_name).trim().split(/\s+/), h = Math.ceil(w[0].length / 2);
+    $('logo').innerHTML = esc(w.length > 1 ? w.slice(0, -1).join(' ') : w[0].slice(0, h)) +
+      `<span>${esc(w.length > 1 ? ' ' + w[w.length - 1] : w[0].slice(h))}</span><span class="tag">склад</span>`;
+  }
   $('nav').style.display = 'flex';
   go(location.hash.replace('#', '') || 'stock');
 }
@@ -195,11 +228,19 @@ async function logout() { await sb.auth.signOut(); location.hash = ''; showLogin
 
 // ---------------------------------------------------------------- навигация
 const TABS = [['stock', 'Склад'], ['in', 'Приход'], ['orders', 'Заказы'], ['sales', 'Продажи'], ['products', 'Товары'], ['refs', 'Справочники']];
+const TAB_ICO = {
+  stock: '<path d="M3 8.5 12 4l9 4.5v10L12 23l-9-4.5z" transform="translate(0 -1.5)"/><path d="M3 7l9 4.5L21 7M12 11.5V21"/>',
+  in: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/>',
+  orders: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8.5 10h7M8.5 14h7M8.5 18h4"/>',
+  sales: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  products: '<path d="M20.5 13.5 13.5 20.5a2 2 0 0 1-2.8 0L3 12.8V3h9.8l7.7 7.7a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/>',
+  refs: '<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v16H6.5A1.5 1.5 0 0 0 5 20.5z"/><path d="M5 20.5A1.5 1.5 0 0 0 6.5 22H19v-3M9 7.5h6"/>',
+};
 async function go(tab) {
   TAB = TABS.some(t => t[0] === tab) ? tab : 'stock';
   location.hash = TAB;
   const { count } = await sb.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'new');
-  $('nav').innerHTML = TABS.map(([k, t]) => `<button data-tab="${k}" class="${k === TAB ? 'on' : ''}">${t}${k === 'orders' && count ? `<span class="cnt">${count}</span>` : ''}</button>`).join('');
+  $('nav').innerHTML = TABS.map(([k, t]) => `<button data-tab="${k}" class="${k === TAB ? 'on' : ''}"><svg class="ico" viewBox="0 0 24 24">${TAB_ICO[k]}</svg>${t}${k === 'orders' && count ? `<span class="cnt">${count}</span>` : ''}</button>`).join('');
   $('app').innerHTML = '<div class="loader">Загрузка…</div>';
   try { await ({ stock: viewStock, in: viewIn, orders: viewOrders, sales: viewSales, products: viewProducts, refs: viewRefs })[TAB](); }
   catch (e) { $('app').innerHTML = `<div class="msg err">${esc(errText(e))}</div>`; }
