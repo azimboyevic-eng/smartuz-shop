@@ -295,7 +295,7 @@ async function viewIn() {
       ${PRODUCTS.map(p => `<option value="${p.id}">${esc(title(p))} · ${money(p.price)}${p.active ? '' : ' (скрыт)'}</option>`).join('')}
       <option value="new">+ Новый товар…</option></select></label>
     <div id="newProd" class="grid2" style="display:none;margin-top:10px">
-      ${refSelects('np')}
+      ${catSelect('npCat')}${refSelects('np')}
       <label class="f"><span>Цена продажи, ${esc(CUR)}</span><input id="npPrice" inputmode="decimal"></label>
       <div class="hint" style="grid-column:1/-1">Нет нужного бренда, модели, памяти или цвета — добавьте во вкладке «Справочники».</div>
     </div>
@@ -323,7 +323,7 @@ async function viewIn() {
     let pid = $('inProd').value;
     if (!pid) return flash('inMsg', 'Выберите товар', false);
     if (pid === 'new') {
-      const np = { brand: $('npBrand').value, model: $('npModel').value, memory: $('npMem').value || null,
+      const np = { category: $('npCat').value, brand: $('npBrand').value, model: $('npModel').value, memory: $('npMem').value || null,
                    color: $('npColor').value || null, price: num($('npPrice').value) || 0 };
       if (!np.brand || !np.model) return flash('inMsg', 'У нового товара нужны бренд и модель', false);
       const { data, error } = await sb.from('products').insert(np).select('id').single();
@@ -470,7 +470,7 @@ async function viewProducts() {
       <label class="switch" style="margin-top:12px"><input type="checkbox" id="sPre" ${s.preorder ? 'checked' : ''}> Показывать клиентам товар «под заказ», когда на складе 0</label>
       <div id="sMsg"></div><button class="btn dark" id="sSave" style="margin-top:10px">Сохранить</button></details>
     <details class="form"><summary><b>+ Создать товары из справочников</b></summary>
-      <div class="grid2" style="margin-top:12px">${refSelects('a', { only: ['brand', 'model'] })}</div>
+      <div class="grid2" style="margin-top:12px">${catSelect('aCat')}${refSelects('a', { only: ['brand', 'model'] })}</div>
       <div class="opt-l" style="margin:12px 0 6px;color:var(--ink2);font-size:12px">Память и цена продажи — отметьте нужные объёмы</div>
       <div class="mem-price">${REFS.memory.map(m => `<label class="switch"><input type="checkbox" data-amem="${esc(m.name)}"> ${esc(m.name)}</label>
         <input type="text" data-aprice="${esc(m.name)}" inputmode="decimal" placeholder="цена, ${esc(CUR)}">`).join('')}</div>
@@ -485,8 +485,10 @@ async function viewProducts() {
     const q = $('pQ').value.toLowerCase();
     const rows = PRODUCTS.filter(p => !q || title(p).toLowerCase().includes(q));
     const inp = 'style="width:96px;text-align:right;border:1px solid var(--line);border-radius:8px;padding:5px 7px"';
-    $('pList').innerHTML = `<table><tr><th>Товар</th><th class="r">Склад</th><th class="r">Цена продажи</th><th class="r">Старая цена</th><th>На сайте</th></tr>
-      ${rows.map(p => `<tr><td>${esc(title(p))}<br><small style="color:var(--ink3)">№${p.id}</small></td><td class="r num">${stock[p.id] || 0}</td>
+    $('pList').innerHTML = `<table><tr><th>Товар</th><th class="hide-sm">Категория</th><th class="r">Склад</th><th class="r">Цена продажи</th><th class="r">Старая цена</th><th>На сайте</th></tr>
+      ${rows.map(p => `<tr><td>${esc(title(p))}<br><small style="color:var(--ink3)">№${p.id}</small></td>
+        <td class="hide-sm"><select data-pcat="${p.id}" style="border:1px solid var(--line);border-radius:8px;padding:5px 6px;background:#fff">${Object.entries(CATS_A).map(([k, v]) => `<option value="${k}" ${p.category === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+        <td class="r num">${stock[p.id] || 0}</td>
         <td class="r"><input data-pprice="${p.id}" value="${esc(p.price)}" inputmode="decimal" ${inp}></td>
         <td class="r"><input data-pold="${p.id}" value="${esc(p.old_price ?? '')}" inputmode="decimal" placeholder="—" ${inp}></td>
         <td><input type="checkbox" data-pact="${p.id}" ${p.active ? 'checked' : ''}></td></tr>`).join('')}</table>
@@ -496,9 +498,9 @@ async function viewProducts() {
   $('pList').onchange = async e => {
     const t = e.target;
     const patch = t.dataset.pprice ? { price: num(t.value) || 0 } : t.dataset.pold ? { old_price: num(t.value) || null }
-                : t.dataset.pact ? { active: t.checked } : null;
+                : t.dataset.pact ? { active: t.checked } : t.dataset.pcat ? { category: t.value } : null;
     if (!patch) return;
-    const id = t.dataset.pprice || t.dataset.pold || t.dataset.pact;
+    const id = t.dataset.pprice || t.dataset.pold || t.dataset.pact || t.dataset.pcat;
     const { error } = await sb.from('products').update(patch).eq('id', id);
     t.style.outline = error ? '2px solid var(--red)' : '2px solid var(--green)';
     if (!error) Object.assign(PRODUCTS.find(p => p.id == id), patch);
@@ -516,7 +518,7 @@ async function viewProducts() {
     const mems = [...document.querySelectorAll('[data-amem]:checked')].map(x => x.dataset.amem);
     const cols = [...document.querySelectorAll('[data-acolor]:checked')].map(x => x.dataset.acolor);
     const img = $('aImg').value.trim();
-    return mems.flatMap(m => cols.map(c => ({ brand: $('aBrand').value, model: $('aModel').value, memory: m, color: c,
+    return mems.flatMap(m => cols.map(c => ({ category: $('aCat').value, brand: $('aBrand').value, model: $('aModel').value, memory: m, color: c,
       price: num(document.querySelector(`[data-aprice="${CSS.escape(m)}"]`).value) || 0,
       image_url: img ? img.replace(/\{color\}/g, c.toLowerCase()) : null })));
   };
@@ -532,6 +534,10 @@ async function viewProducts() {
     setTimeout(viewProducts, 1200);
   };
 }
+
+// категории товаров (shop.products.category) — те же, что в строке категорий на сайте
+const CATS_A = { phones: 'Телефоны', tablets: 'Планшеты', audio: 'Гарнитура', accessories: 'Аксессуары' };
+const catSelect = id => `<label class="f"><span>Категория</span><select id="${id}">${Object.entries(CATS_A).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>`;
 
 // ---------------------------------------------------------------- СПРАВОЧНИКИ
 let REFS = { brands: [], models: [], memory: [], colors: [] };
