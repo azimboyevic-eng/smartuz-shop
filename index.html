@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Смартфоны — интернет-магазин</title>
+<title>Интернет-магазин — телефоны, планшеты, аксессуары</title>
 <meta name="description" content="Смартфоны с ценами и наличием. Заказ онлайн за минуту.">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
@@ -244,7 +244,7 @@
 <header class="main"><div class="wrap">
   <a class="logo" href="#/" id="logo">Smart<span>Uz</span></a>
   <button class="btn-cat" data-act="catalog"><svg class="ico" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Каталог</button>
-  <form class="search" id="searchForm"><input id="q" type="search" placeholder="Искать смартфоны: модель, память, цвет" autocomplete="off">
+  <form class="search" id="searchForm"><input id="q" type="search" placeholder="Искать товары: модель, память, цвет" autocomplete="off">
     <button aria-label="Найти"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button></form>
   <div class="hlinks">
     <a class="hlink" href="#/fav"><svg class="ico" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Избранное<span class="cnt" data-cnt="fav"></span></a>
@@ -295,6 +295,15 @@ const PH = c => `<svg viewBox="0 0 90 190" width="46%"><rect x="2" y="2" width="
 const HEART = '<svg class="ico" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>';
 const imgOr = (src, c, cls = '') => src ? `<img class="${cls}" src="${esc(src)}" alt="" loading="lazy">` : PH(c);
 
+// ===================================================================== категории (как в shop.products.category)
+const CATS = {
+  phones:      { name: 'Телефоны',   one: 'Смартфон', icon: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>' },
+  tablets:     { name: 'Планшеты',   one: 'Планшет',  icon: '<rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M11 18h2"/>' },
+  audio:       { name: 'Гарнитура',  one: '',         icon: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="5" height="7" rx="2"/><rect x="16" y="14" width="5" height="7" rx="2"/>' },
+  accessories: { name: 'Аксессуары', one: '',         icon: '<path d="M9 7V4h6v3"/><rect x="5" y="7" width="14" height="13" rx="2.5"/><path d="M12 11v5"/>' },
+};
+const catIco = c => `<svg class="ico" viewBox="0 0 24 24" style="width:30px;height:30px;color:var(--acc)">${CATS[c].icon}</svg>`;
+
 // ===================================================================== данные
 let ITEMS = [], GROUPS = [], byId = {}, byKey = {};
 async function load() {
@@ -304,13 +313,13 @@ async function load() {
   const s = Object.fromEntries((st.data || []).map(r => [r.key, r.value]));
   S = { shop: s.shop_name || S.shop, cur: s.currency || '$', preorder: !!s.preorder, contacts: s.contacts || '',
         months: Number(s.installment_months) || 0, markup: Number(s.installment_markup) || 0 };
-  ITEMS = cat.data.map(r => ({ id: r.id, brand: r.brand, model: r.model, mem: r.memory, color: r.color, price: Number(r.price),
+  ITEMS = cat.data.map(r => ({ id: r.id, cat: r.category || 'phones', brand: r.brand, model: r.model, mem: r.memory, color: r.color, price: Number(r.price),
                                old: r.old_price ? Number(r.old_price) : null, img: r.image_url, descr: r.descr, qty: r.in_stock }));
   byId = Object.fromEntries(ITEMS.map(i => [i.id, i]));
   const m = new Map();
   for (const it of ITEMS) {
     const key = it.brand + '|' + it.model;
-    if (!m.has(key)) m.set(key, { key, brand: it.brand, model: it.model, items: [] });
+    if (!m.has(key)) m.set(key, { key, cat: it.cat, brand: it.brand, model: it.model, items: [] });
     m.get(key).items.push(it);
   }
   GROUPS = [...m.values()].map(g => {
@@ -320,7 +329,7 @@ async function load() {
     g.min = g.cheap.price;
     g.inStock = g.items.reduce((s, i) => s + i.qty, 0);
     g.img = (g.items.find(i => i.img) || {}).img;
-    g.title = `Смартфон ${g.brand} ${shortModel(g.model)}${subOf(g.model) ? ', ' + subOf(g.model) : ''}`;
+    g.title = `${(CATS[g.cat] || {}).one || ''} ${g.brand} ${shortModel(g.model)}${subOf(g.model) ? ', ' + subOf(g.model) : ''}`.trim();
     return g;
   }).sort((a, b) => b.min - a.min);
   byKey = Object.fromEntries(GROUPS.map(g => [g.key, g]));
@@ -365,15 +374,12 @@ function renderChrome() {
   const w = S.shop.trim().split(/\s+/);
   $('logo').innerHTML = esc(w.length > 1 ? w.slice(0, -1).join(' ') : w[0].slice(0, Math.ceil(w[0].length / 2))) +
     `<span>${esc(w.length > 1 ? ' ' + w[w.length - 1] : w[0].slice(Math.ceil(w[0].length / 2)))}</span>`;
-  document.title = S.shop + ' — смартфоны';
+  document.title = S.shop + ' — интернет-магазин';
   const bot = CFG.bot ? 'https://t.me/' + CFG.bot : '#';
   $('topBot').href = bot; $('topOrders').href = CFG.bot ? bot + '?start=orders' : '#';
-  const brands = [...new Set(GROUPS.map(g => g.brand))];
-  const chips = [['#/catalog', 'Все смартфоны'], ['#/catalog?stock=1', 'В наличии'],
-    ...brands.map(b => ['#/catalog?brand=' + encodeURIComponent(b), b]),
-    ...GROUPS.map(g => ['#/p/' + encodeURIComponent(g.key), shortModel(g.model) + (subOf(g.model) ? ' · ' + subOf(g.model) : '')])];
+  const chips = [['#/catalog', 'Все товары'], ...Object.entries(CATS).map(([k, c]) => ['#/catalog?cat=' + k, c.name])];
   $('chips').innerHTML = chips.map(([h, t]) => `<a class="chip" href="${h}">${esc(t)}</a>`).join('');
-  $('foot').innerHTML = `<div style="flex:1;min-width:220px"><b>${esc(S.shop)}</b>Смартфоны с ценами и наличием.<br>Заказ онлайн — менеджер перезвонит и подтвердит.${S.contacts ? '<br>' + esc(S.contacts) : ''}</div>
+  $('foot').innerHTML = `<div style="flex:1;min-width:220px"><b>${esc(S.shop)}</b>Телефоны, планшеты, гарнитура и аксессуары с ценами и наличием.<br>Заказ онлайн — менеджер перезвонит и подтвердит.${S.contacts ? '<br>' + esc(S.contacts) : ''}</div>
     <div><b>Покупателям</b><a href="#/catalog">Каталог</a><a href="#/cart">Корзина</a><a href="#/fav">Избранное</a></div>
     <div><b>Связь</b>${CFG.bot ? `<a href="${bot}" target="_blank">Telegram @${esc(CFG.bot)}</a>` : ''}<a href="admin.html">Вход для сотрудников</a></div>`;
   if (IN_TG) document.querySelector('.topbar').style.display = 'none';
@@ -395,8 +401,9 @@ function viewHome() {
       <div class="dots">${tops.map((_, i) => `<button data-slide="${i}" class="${i ? '' : 'on'}" aria-label="Слайд ${i + 1}"></button>`).join('')}</div>
       <button class="arrow l" data-slide="-1" aria-label="Назад"><svg class="ico" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
       <button class="arrow r" data-slide="+1" aria-label="Вперёд"><svg class="ico" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button></div>` : ''}
-    <div class="tiles">${GROUPS.map(g => `<a class="tile" href="#/p/${encodeURIComponent(g.key)}">${g.img ? `<img src="${esc(g.img)}" alt="" loading="lazy">` : ''}
-      <span>${esc(shortModel(g.model))}<small>${esc(subOf(g.model) || g.brand)}</small></span></a>`).join('')}</div>
+    <div class="tiles">${Object.entries(CATS).map(([k, c]) => { const gs = GROUPS.filter(g => g.cat === k), img = (gs.find(g => g.img) || {}).img;
+      return `<a class="tile" href="#/catalog?cat=${k}">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : catIco(k)}
+      <span>${esc(c.name)}<small>${gs.length ? gs.length + ' ' + plural(gs.length, 'модель', 'модели', 'моделей') : 'скоро'}</small></span></a>`; }).join('')}</div>
     ${instock.length ? `<div class="sec-h"><h2>В наличии</h2><a href="#/catalog?stock=1"><svg class="ico" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></a></div>${grid(instock)}` : ''}
     <div class="sec-h"><h2>Популярное</h2><a href="#/catalog"><svg class="ico" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></a></div>${grid(GROUPS)}
   </div>`;
@@ -422,6 +429,7 @@ function filtered(p) {
       (!p.get('stock') || i.qty > 0) && (!p.get('pmin') || i.price >= +p.get('pmin')) && (!p.get('pmax') || i.price <= +p.get('pmax')) &&
       (!q || [i.brand, i.model, i.mem, i.color].join(' ').toLowerCase().includes(q)));
     if (p.get('brand') && g.brand !== p.get('brand')) items = [];
+    if (p.get('cat') && g.cat !== p.get('cat')) items = [];
     return items.length ? { ...g, min: Math.min(...items.map(i => i.price)), cheap: items.slice().sort((a, b) => a.price - b.price)[0] } : null;
   }).filter(Boolean);
   const sort = p.get('sort') || 'pop';
@@ -444,9 +452,13 @@ function filtersHtml(p) {
 function viewCatalog(p) {
   const gs = filtered(p);
   const q = p.get('q');
-  const head = q ? `Поиск: «${esc(q)}»` : p.get('brand') ? 'Смартфоны ' + esc(p.get('brand')) : p.get('stock') ? 'В наличии' : 'Смартфоны';
-  const n = gs.reduce((s, g) => s + g.items.length, 0);
-  return `<div class="wrap"><div class="crumbs"><a href="#/">Главная</a> / Каталог</div>
+  const cat = CATS[p.get('cat')];
+  const head = q ? `Поиск: «${esc(q)}»` : cat ? esc(cat.name) + (p.get('brand') ? ' ' + esc(p.get('brand')) : '')
+             : p.get('brand') ? esc(p.get('brand')) : p.get('stock') ? 'В наличии' : 'Все товары';
+  if (!gs.length && cat && !q) return `<div class="wrap"><div class="crumbs"><a href="#/">Главная</a> / ${esc(cat.name)}</div>
+    <div class="done">${catIco(p.get('cat'))}<h2>${esc(cat.name)} скоро появятся</h2><p style="color:var(--ink2)">Товары этой категории ещё не добавлены. Посмотрите, что есть сейчас:</p>
+    <a class="btn" href="#/catalog">Все товары</a></div></div>`;
+  return `<div class="wrap"><div class="crumbs"><a href="#/">Главная</a> / ${cat ? `<a href="#/catalog">Каталог</a> / ${esc(cat.name)}` : 'Каталог'}</div>
     <div class="cat-h"><h1>${head}</h1><span>${gs.length} ${plural(gs.length, 'модель', 'модели', 'моделей')}</span></div>
     <div class="layout"><aside class="filters" id="filters">${filtersHtml(p)}</aside>
       <div><div class="toolbar"><button class="btn ghost btn-filters" data-act="filters">Фильтры</button><span class="sp"></span>
@@ -470,8 +482,8 @@ function viewProduct(key, p) {
   if (!v) { v = g.items.filter(i => i.color === sel.color).sort((a, b) => memVal(a.mem) - memVal(b.mem))[0] || g.cheap; sel.color = v.color; sel.mem = v.mem; }
   const memsFor = new Set(g.items.filter(i => i.color === sel.color).map(i => i.mem));
   const inCart = CART[v.id] || 0;
-  const similar = GROUPS.filter(x => x.key !== key).slice(0, 5);
-  return `<div class="wrap"><div class="crumbs"><a href="#/">Главная</a> / <a href="#/catalog">Смартфоны</a> / <a href="#/catalog?brand=${encodeURIComponent(g.brand)}">${esc(g.brand)}</a></div>
+  const similar = GROUPS.filter(x => x.key !== key && x.cat === g.cat).slice(0, 5);
+  return `<div class="wrap"><div class="crumbs"><a href="#/">Главная</a> / <a href="#/catalog?cat=${g.cat}">${esc((CATS[g.cat] || {}).name || 'Каталог')}</a> / <a href="#/catalog?cat=${g.cat}&brand=${encodeURIComponent(g.brand)}">${esc(g.brand)}</a></div>
     <div class="pd">
       <div class="thumbs">${g.colors.map(c => `<button data-pc="${esc(c)}" class="${c === sel.color ? 'on' : ''}">${imgOr(picFor(g, c), colorOf(c))}</button>`).join('')}</div>
       <div><div class="gallery">${imgOr(v.img || picFor(g, v.color), colorOf(v.color))}
@@ -577,9 +589,10 @@ if (IN_TG && tg.BackButton) tg.BackButton.onClick(() => history.length > 1 ? his
 function openDrawer(html, right = false) { $('drawerPanel').innerHTML = html; $('drawerPanel').classList.toggle('right', right); $('drawer').style.display = 'block'; }
 function closeDrawer() { $('drawer').style.display = 'none'; }
 function catalogDrawer() {
-  const brands = [...new Set(GROUPS.map(g => g.brand))];
-  openDrawer(`<h3>Каталог</h3><a class="item" href="#/catalog"><b>Все смартфоны</b></a><a class="item" href="#/catalog?stock=1">В наличии</a>
-    ${brands.map(b => `<div class="grp">${esc(b)}</div>` + GROUPS.filter(g => g.brand === b).map(g => `<a class="item" href="#/p/${encodeURIComponent(g.key)}">
+  openDrawer(`<h3>Каталог</h3><a class="item" href="#/catalog"><b>Все товары</b></a><a class="item" href="#/catalog?stock=1">В наличии</a>
+    ${Object.entries(CATS).map(([k, c]) => `<div class="grp"><a href="#/catalog?cat=${k}">${esc(c.name)}</a></div>` +
+      (GROUPS.some(g => g.cat === k) ? '' : '<div class="item" style="color:var(--ink3)">скоро</div>') +
+      GROUPS.filter(g => g.cat === k).map(g => `<a class="item" href="#/p/${encodeURIComponent(g.key)}">
       ${g.img ? `<img src="${esc(g.img)}" alt="">` : ''}<span>${esc(shortModel(g.model))}<br><small style="color:var(--ink3)">${esc(subOf(g.model))} · от ${fmt(g.min)}</small></span></a>`).join('')).join('')}`);
 }
 
