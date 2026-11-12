@@ -475,6 +475,15 @@ function setParam(mut) {
 }
 
 // ---------- страница товара
+// описание товара: строки «Параметр: значение» идут в таблицу характеристик, остальное — текстом
+function specRows(d) {
+  const rows = [], text = [];
+  String(d || '').split('\n').map(s => s.trim()).filter(Boolean).forEach(s => {
+    const m = s.match(/^([^:]{2,40}):\s+(.+)$/);
+    m ? rows.push([m[1], m[2]]) : text.push(s);
+  });
+  return { rows, text: text.join('\n') };
+}
 let PSEL = {};
 function viewProduct(key, p) {
   const g = byKey[key];
@@ -493,10 +502,11 @@ function viewProduct(key, p) {
           <button class="fav ${FAV.has(key) ? 'on' : ''}" data-fav="${esc(key)}" style="right:14px;top:14px"><svg class="ico" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></button></div>
         <div class="specs"><h3>Характеристики</h3><table>
           <tr><td>Бренд</td><td>${esc(g.brand)}</td></tr><tr><td>Модель</td><td>${esc(shortModel(g.model))}</td></tr>
-          ${subOf(g.model) ? `<tr><td>SIM-карты</td><td>${esc(subOf(g.model))}</td></tr>` : ''}
+          ${subOf(g.model) && !specRows(v.descr).rows.some(r => r[0] === 'SIM-карты') ? `<tr><td>SIM-карты</td><td>${esc(subOf(g.model))}</td></tr>` : ''}
           <tr><td>Встроенная память</td><td>${esc(v.mem)}</td></tr><tr><td>Цвет</td><td>${esc(v.color)}</td></tr>
-          <tr><td>Доступные варианты</td><td>${g.items.length}: ${esc(g.mems.join(', '))} · ${g.colors.length} ${plural(g.colors.length, 'цвет', 'цвета', 'цветов')}</td></tr></table>
-          ${v.descr ? `<p style="margin-top:14px;color:var(--ink2)">${esc(v.descr)}</p>` : ''}</div></div>
+          <tr><td>Доступные варианты</td><td>${g.items.length}: ${esc(g.mems.join(', '))} · ${g.colors.length} ${plural(g.colors.length, 'цвет', 'цвета', 'цветов')}</td></tr>
+          ${specRows(v.descr).rows.map(([k, x]) => `<tr><td>${esc(k)}</td><td>${esc(x)}</td></tr>`).join('')}</table>
+          ${specRows(v.descr).text ? `<p style="margin-top:14px;color:var(--ink2);white-space:pre-line">${esc(specRows(v.descr).text)}</p>` : ''}</div></div>
       <div><h1>${esc(g.title)}, ${esc(v.mem)}, ${esc(v.color)}</h1><div class="sku">Артикул ${v.id}</div>
         <div class="opt-l">Цвет: <b>${esc(v.color)}</b></div>
         <div class="colors">${g.colors.map(c => `<button data-pc="${esc(c)}" class="${c === sel.color ? 'on' : ''}" title="${esc(c)}">${picFor(g, c) ? `<img src="${esc(picFor(g, c))}" alt="">` : `<span class="sw" style="background:${colorOf(c)}"></span>`}</button>`).join('')}</div>
